@@ -7,9 +7,10 @@ import sys
 import hashlib
 import subprocess
 
-vid = '1000'
+vid        = '1000'
 dockerfile = 'Dockerfile'
-ip = '10.0.2.18'
+ip         = '10.0.2.18'
+name       = os.path.dirname(os.path.realpath(dockerfile)).split('/')[-1].lower()
 
 def call(arg):
     if subprocess.call(arg) != 0:
@@ -19,56 +20,42 @@ def call(arg):
         sys.exit(0)
 
 def vzcreate(arg):
-    call(['/usr/sbin/vzctl', 'create', vid, '--ostemplate', arg, '--ipadd', ip ])
+    call(['/usr/sbin/vzctl', 'create', vid, '--ostemplate', arg, '--ipadd', ip, '--name', name, '--hostname', name ])
     call(['/usr/sbin/vzctl', 'start', vid])
     # src directory where Dockerfile is located
     src = os.path.dirname(os.path.realpath(dockerfile))
     dst = '/vz/root/' + vid + '/vztmp'
     call(['/usr/sbin/vzctl', 'exec2', vid, 'mkdir /vztmp'])
-    call(['/bin/mount', '-n', '-r', '-t', 'simfs', src, dst, '-o', src])
-
-def vzmaintain(arg):
-    print 'MAINTAINER '+arg+': NOT IMPLEMENTED'
-
-def vzlabel(arg):
-    print 'LABEL '+arg+': NOT IMPLEMENTED'
-    sys.exit(0)
+    call(['/bin/mount', '--bind', src, dst])
 
 def vzadd(arg):
-    print 'ADD '+arg
     lastarg = arg.split(' ')[-1]
-    call(['/usr/sbin/vzctl', 'exec2', vid, 'cd /vztmp; mkdir -p $(dirname '+lastarg+'); cp -rv '+arg])
+    call(['/usr/sbin/vzctl', 'exec2', vid, 'cd /vztmp; mkdir -p $(dirname '+lastarg+'); cp -r '+arg])
 
 def vzexec(arg):
-    print 'RUN '+arg
     call(['/usr/sbin/vzctl', 'exec2', vid, arg])
 
-def vzenv(arg):
-    print 'ENV '+arg+': NOT IMPLEMENTED'
-    sys.exit(0)
-
-def vzentry(arg):
-    print 'ENTYPOINT '+arg+': NOT IMPLEMENTED'
-    sys.exit(0)
-
-def vzaddservice(arg):
-    print 'CMD '+arg+': NOT IMPLEMENTED'
-    sys.exit(0)
-
-def cleanup():
-    None 
+def nop(arg):
+    print '  --> NOT implemented'
 
 image_change = [ 'FROM', 'LABEL', 'ADD', 'COPY', 'RUN', 'ENV', 'ENTRYPOINT', 'CMD' ]
 functions = {
     'FROM':         vzcreate,
-    'MAINTAINER':   vzmaintain,
-    'LABEL':        vzlabel,
+    'MAINTAINER':   nop,
+    'RUN':          vzexec,
+    'CMD':          nop,
+    'LABEL':        nop,
+    'EXPOSE':       nop,
+    'ENV':          nop,
     'ADD':          vzadd,
     'COPY':         vzadd,
-    'RUN':          vzexec,
-    'ENV':          vzenv,
-    'ENTRYPOINT':   vzentry,
-    'CMD':          vzaddservice
+    'ENTRYPOINT':   nop,
+    'VOLUME':       nop,
+    'USER':         nop,
+    'WORKDIR':      nop,
+    'ARG':          nop,
+    'ONBUILD':      nop,
+    'STOPSIGNAL':   nop
 }
 
 def run(commands):
@@ -78,6 +65,7 @@ def run(commands):
             continue
         cmd = functions[command['command']]
         arg = command['arguments']
+        print command['command'], arg
         cmd(arg)
 
 def parse_dockerfile(dockerfile):
